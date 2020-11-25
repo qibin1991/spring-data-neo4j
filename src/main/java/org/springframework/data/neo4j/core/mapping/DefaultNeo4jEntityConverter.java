@@ -108,7 +108,7 @@ final class DefaultNeo4jEntityConverter implements Neo4jEntityConverter {
 			}
 			if (queryRoot == null) {
 				for (Value value : recordValues) {
-					if (value.hasType(typeSystem.MAP())) {
+					if (value.hasType(typeSystem.MAP()) && !value.hasType(typeSystem.NODE())) {
 						queryRoot = value;
 						break;
 					}
@@ -116,11 +116,14 @@ final class DefaultNeo4jEntityConverter implements Neo4jEntityConverter {
 			}
 
 			if (queryRoot == null) {
-				throw new MappingException(String.format("Could not find mappable nodes or relationships inside %s for %s", mapAccessor, rootNodeDescription));
+				throw new NoRootNodeMappingException(String.format("Could not find mappable nodes or relationships inside %s for %s", mapAccessor, rootNodeDescription));
 			} else {
 				return map(queryRoot, queryRoot, rootNodeDescription, new KnownObjects(), new HashSet<>());
 			}
 		} catch (Exception e) {
+			if(e instanceof MappingException) {
+				throw e;
+			}
 			throw new MappingException("Error mapping " + mapAccessor.toString(), e);
 		}
 	}
