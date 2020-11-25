@@ -63,4 +63,12 @@ public final class Person {
 	public void setBorn(Integer born) {
 		this.born = born;
 	}
+
+	@Override public String toString() {
+		return "Person{" +
+			   "id=" + id +
+			   ", name='" + name + '\'' +
+			   ", born=" + born +
+			   '}';
+	}
 }

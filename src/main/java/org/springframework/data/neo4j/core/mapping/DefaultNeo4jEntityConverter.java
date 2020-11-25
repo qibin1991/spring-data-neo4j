@@ -31,6 +31,7 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
 import org.apache.commons.logging.LogFactory;
@@ -246,7 +247,7 @@ final class DefaultNeo4jEntityConverter implements Neo4jEntityConverter {
 				knownObjects.storeObject(internalId, instance);
 				// Fill associations
 				concreteNodeDescription.doWithAssociations(
-						populateFrom(queryResult, allValues, propertyAccessor, isConstructorParameter, relationships, knownObjects, processedSegments));
+						populateFrom(queryResult, allValues, propertyAccessor, isConstructorParameter, relationships, processedSegments));
 			}
 			ET bean = propertyAccessor.getBean();
 
@@ -302,7 +303,7 @@ final class DefaultNeo4jEntityConverter implements Neo4jEntityConverter {
 				Neo4jPersistentProperty matchingProperty = nodeDescription.getRequiredPersistentProperty(parameter.getName());
 
 				if (matchingProperty.isRelationship()) {
-					return createInstanceOfRelationships(matchingProperty, values, allValues, knownObjects, relationships, processedSegments).orElse(null);
+					return createInstanceOfRelationships(matchingProperty, values, allValues, relationships, processedSegments).orElse(null);
 				} else if (matchingProperty.isDynamicLabels()) {
 					return createDynamicLabelsProperty(matchingProperty.getTypeInformation(), surplusLabels);
 				} else if (matchingProperty.isEntityInRelationshipWithProperties()) {
@@ -339,7 +340,7 @@ final class DefaultNeo4jEntityConverter implements Neo4jEntityConverter {
 
 	private AssociationHandler<Neo4jPersistentProperty> populateFrom(MapAccessor queryResult, MapAccessor allValues,
 			PersistentPropertyAccessor<?> propertyAccessor, Predicate<Neo4jPersistentProperty> isConstructorParameter,
-			Collection<RelationshipDescription> relationshipDescriptions, KnownObjects knownObjects, Set<Path.Segment> processedSegments) {
+			Collection<RelationshipDescription> relationshipDescriptions, Set<Path.Segment> processedSegments) {
 		return association -> {
 
 			Neo4jPersistentProperty persistentProperty = association.getInverse();
@@ -347,13 +348,13 @@ final class DefaultNeo4jEntityConverter implements Neo4jEntityConverter {
 				return;
 			}
 
-			createInstanceOfRelationships(persistentProperty, queryResult, allValues, knownObjects, relationshipDescriptions, processedSegments)
+			createInstanceOfRelationships(persistentProperty, queryResult, allValues, relationshipDescriptions, processedSegments)
 					.ifPresent(value -> propertyAccessor.setProperty(persistentProperty, value));
 		};
 	}
 
 	private Optional<Object> createInstanceOfRelationships(Neo4jPersistentProperty persistentProperty, MapAccessor values,
-			MapAccessor allValues, KnownObjects knownObjects, Collection<RelationshipDescription> relationshipDescriptions, Set<Path.Segment> processedSegments) {
+			MapAccessor allValues, Collection<RelationshipDescription> relationshipDescriptions, Set<Path.Segment> processedSegments) {
 
 		RelationshipDescription relationshipDescription = relationshipDescriptions.stream()
 				.filter(r -> r.getFieldName().equals(persistentProperty.getName())).findFirst().get();
@@ -451,15 +452,27 @@ final class DefaultNeo4jEntityConverter implements Neo4jEntityConverter {
 					.allMatch(listEntry -> typeSystem.NODE().isTypeOf(listEntry));
 
 			// find relationships in the result
-			List<Relationship> allMatchingTypeRelationshipsInResult = StreamSupport
-					.stream(allValues.values().spliterator(), false).filter(isList.and(containsOnlyRelationships))
-					.flatMap(entry -> entry.asList(Value::asRelationship).stream())
-					.filter(r -> r.type().equals(relationshipType) || relationshipDescription.isDynamic())
-					.collect(Collectors.toList());
+			List<Relationship> allMatchingTypeRelationshipsInResult;
+			List<Node> allNodesWithMatchingLabelInResult;
 
-			List<Node> allNodesWithMatchingLabelInResult = StreamSupport.stream(allValues.values().spliterator(), false)
-					.filter(isList.and(containsOnlyNodes)).flatMap(entry -> entry.asList(Value::asNode).stream())
-					.filter(n -> n.hasLabel(targetLabel)).collect(Collectors.toList());
+			if(allValues.containsKey("__is_path_segment__") && allValues.get("__is_path_segment__").asBoolean()) {
+				allMatchingTypeRelationshipsInResult = Stream.of(allValues.get("relationship").asRelationship())
+								.filter(r -> r.type().equals(relationshipType) || relationshipDescription.isDynamic())
+								.collect(Collectors.toList());
+
+				allNodesWithMatchingLabelInResult = Stream.of(allValues.get("start").asNode(), allValues.get("end").asNode())
+						.filter(n -> n.hasLabel(targetLabel)).collect(Collectors.toList());
+			} else {
+				allMatchingTypeRelationshipsInResult = StreamSupport
+						.stream(allValues.values().spliterator(), false).filter(isList.and(containsOnlyRelationships))
+						.flatMap(entry -> entry.asList(Value::asRelationship).stream())
+						.filter(r -> r.type().equals(relationshipType) || relationshipDescription.isDynamic())
+						.collect(Collectors.toList());
+
+				allNodesWithMatchingLabelInResult = StreamSupport.stream(allValues.values().spliterator(), false)
+						.filter(isList.and(containsOnlyNodes)).flatMap(entry -> entry.asList(Value::asNode).stream())
+						.filter(n -> n.hasLabel(targetLabel)).collect(Collectors.toList());
+			}
 
 			if (allNodesWithMatchingLabelInResult.isEmpty() && allMatchingTypeRelationshipsInResult.isEmpty()) {
 				return Optional.empty();
@@ -473,7 +486,7 @@ final class DefaultNeo4jEntityConverter implements Neo4jEntityConverter {
 
 				for (Relationship possibleRelationship : allMatchingTypeRelationshipsInResult) {
 					if (targetIdSelector.apply(possibleRelationship) == targetNodeId && sourceIdSelector.apply(possibleRelationship).equals(sourceNodeId)) {
-						Object mappedObject = map(possibleValueNode, values, concreteTargetNodeDescription, knownObjects, processedSegments);
+						Object mappedObject = map(possibleValueNode, values, concreteTargetNodeDescription, processedSegments);
 						if (relationshipDescription.hasRelationshipProperties()) {
 
 							Object relationshipProperties = map(possibleRelationship, allValues,
@@ -492,7 +505,7 @@ final class DefaultNeo4jEntityConverter implements Neo4jEntityConverter {
 		} else {
 			for (Value relatedEntity : list.asList(Function.identity())) {
 
-				Object valueEntry = map(relatedEntity, allValues, concreteTargetNodeDescription, knownObjects, processedSegments);
+				Object valueEntry = map(relatedEntity, allValues, concreteTargetNodeDescription, processedSegments);
 
 				if (relationshipDescription.hasRelationshipProperties()) {
 					String relationshipSymbolicName = sourceLabel

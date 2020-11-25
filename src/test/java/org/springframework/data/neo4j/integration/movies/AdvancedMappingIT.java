@@ -63,15 +63,28 @@ class AdvancedMappingIT {
 	}
 
 	@Test
-	void pathMappingShouldWork(@Autowired PeopleRepository peopleRepository) {
+	void pathMappingShouldWork(@Autowired PeopleRepository peopleRepository, @Autowired MovieRepository movieRepository) {
 
 		List<Person> people = peopleRepository.findAllOnShortestPathBetween("Kevin Bacon", "Meg Ryan");
+		System.out.println(people);
 		Assertions.assertThat(people)
 				.hasSize(3);
+
+		List<Movie> movies = movieRepository.findAllOnShortestPathBetween("Kevin Bacon", "Meg Ryan");
+		Assertions.assertThat(movies)
+				.hasSize(2);
+		for (Movie movie : movies) {
+			System.out.println(movie.getTitle() + ", " + movie.getActors());
+		}
 	}
 
 	interface MovieRepository extends Neo4jRepository<Movie, String> {
-
+		@Query(""
+			   + "MATCH p=shortestPath(\n"
+			   + "(bacon:Person {name: $person1})-[*]-(meg:Person {name: $person2}))\n"
+			   + "RETURN p"
+		)
+		List<Movie> findAllOnShortestPathBetween(@Param("person1") String person1, @Param("person2") String person2);
 	}
 
 	interface PeopleRepository extends Neo4jRepository<Person, Long> {
@@ -91,7 +104,6 @@ class AdvancedMappingIT {
 
 		@Bean
 		public Driver driver() {
-			System.out.println("what?");
 			return neo4jConnectionSupport.getDriver();
 		}
 	}

@@ -15,30 +15,22 @@
  */
 package org.springframework.data.neo4j.core;
 
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 import org.apiguardian.api.API;
 import org.neo4j.driver.Record;
 import org.neo4j.driver.Value;
 import org.neo4j.driver.Values;
-import org.neo4j.driver.internal.value.MapValue;
 import org.neo4j.driver.types.MapAccessor;
 import org.neo4j.driver.types.Path;
 import org.neo4j.driver.types.TypeSystem;
-import org.springframework.data.mapping.MappingException;
 import org.springframework.data.neo4j.core.mapping.NoRootNodeMappingException;
 import org.springframework.lang.Nullable;
 
@@ -166,52 +158,28 @@ public final class PreparedQuery<T> {
 		public Object apply(TypeSystem t, Record r) {
 			if (r.size() == 1) {
 				Value value = r.get(0);
-				if(value.hasType(t.LIST())) {
+				if (value.hasType(t.LIST())) {
 					aggregated.compareAndSet(false, true);
 					return value.asList(v -> target.apply(t, v));
-				}
-				else if(value.hasType(t.PATH())) {
+				} else if (value.hasType(t.PATH())) {
 					aggregated.compareAndSet(false, true);
 					Path path = value.asPath();
 
-					Set<Value> nodes = StreamSupport.stream(path.nodes().spliterator(), false)
-						.map(Values::value)
-						.collect(Collectors.toSet());
-
-					List<Value> rel = StreamSupport.stream(path.relationships().spliterator(), false)
-							.map(Values::value)
-							.collect(Collectors.toList());
 					Set<Object> result = new HashSet<>();
 					path.iterator().forEachRemaining(segment -> {
 
 						Map<String, Object> mapValue = new HashMap<>();
+						mapValue.put("__is_path_segment__", true);
 						mapValue.put("start", Values.value(segment.start()));
 						mapValue.put("relationship", Values.value(segment.relationship()));
 						mapValue.put("end", Values.value(segment.end()));
 						Value v = Values.value(mapValue);
 						try {
-						result.add(target.apply(t, v));
+							result.add(target.apply(t, v));
 						} catch (NoRootNodeMappingException e) {
 						}
-						System.out.println(segment.start().labels() + ";");
 					});
 					return result;
-					/*
-					return StreamSupport.stream(path.nodes().spliterator(), false)
-							.peek(v -> {
-								System.out.println(v.labels());
-							})
-							.map(v -> {
-
-
-								try {
-									return target.apply(t, Values.value(v));
-								} catch (NoRootNodeMappingException e) {
-									return null;
-								}
-							})
-							.filter(v -> v != null)
-							.collect(Collectors.toList());*/
 				}
 			}
 			return target.apply(t, new RecordMapAccessor(r));

@@ -55,4 +55,11 @@ public final class Actor {
 	public List<String> getRoles() {
 		return Collections.unmodifiableList(roles);
 	}
+
+	@Override public String toString() {
+		return "Actor{" +
+			   "person=" + person +
+			   ", roles=" + roles +
+			   '}';
+	}
 }
