@@ -72,17 +72,22 @@ final class DefaultNeo4jEntityConverter implements Neo4jEntityConverter {
 	private final NodeDescriptionStore nodeDescriptionStore;
 	private final Neo4jConversionService conversionService;
 
-	private TypeSystem typeSystem;
+	private final TypeSystem typeSystem;
 
-	DefaultNeo4jEntityConverter(EntityInstantiators entityInstantiators, Neo4jConversionService conversionService, NodeDescriptionStore nodeDescriptionStore) {
+	private final KnownObjects knownObjects = new KnownObjects();
+
+	DefaultNeo4jEntityConverter(EntityInstantiators entityInstantiators, Neo4jConversionService conversionService,
+			NodeDescriptionStore nodeDescriptionStore, TypeSystem typeSystem) {
 
 		Assert.notNull(entityInstantiators, "EntityInstantiators must not be null!");
 		Assert.notNull(conversionService, "Neo4jConversionService must not be null!");
 		Assert.notNull(nodeDescriptionStore, "NodeDescriptionStore must not be null!");
+		Assert.notNull(typeSystem, "TypeSystem must not be null!");
 
 		this.entityInstantiators = entityInstantiators;
 		this.conversionService = conversionService;
 		this.nodeDescriptionStore = nodeDescriptionStore;
+		this.typeSystem = typeSystem;
 	}
 
 	@Override
@@ -118,7 +123,7 @@ final class DefaultNeo4jEntityConverter implements Neo4jEntityConverter {
 			if (queryRoot == null) {
 				throw new NoRootNodeMappingException(String.format("Could not find mappable nodes or relationships inside %s for %s", mapAccessor, rootNodeDescription));
 			} else {
-				return map(queryRoot, queryRoot, rootNodeDescription, new KnownObjects(), new HashSet<>());
+				return map(queryRoot, queryRoot, rootNodeDescription, new HashSet<>());
 			}
 		} catch (Exception e) {
 			if(e instanceof MappingException) {
@@ -175,10 +180,6 @@ final class DefaultNeo4jEntityConverter implements Neo4jEntityConverter {
 		}
 	}
 
-	void setTypeSystem(TypeSystem typeSystem) {
-		this.typeSystem = typeSystem;
-	}
-
 	/**
 	 * Merges the root node of a query and the remaining record into one map, adding the internal ID of the node, too.
 	 * Merge happens only when the record contains additional values.
@@ -201,16 +202,15 @@ final class DefaultNeo4jEntityConverter implements Neo4jEntityConverter {
 	 * @param queryResult The original query result or a reduced form like a node or similar
 	 * @param allValues The original query result
 	 * @param nodeDescription The node description of the current entity to be mapped from the result
-	 * @param knownObjects The current list of known objects
 	 * @param processedSegments Path segments already processed in the mapping process. Only applies to path-based queries
 	 * @param <ET> As in entity type
 	 * @return The mapped entity
 	 */
-	private <ET> ET map(MapAccessor queryResult, MapAccessor allValues, Neo4jPersistentEntity<ET> nodeDescription, KnownObjects knownObjects, Set<Path.Segment> processedSegments) {
-		return map(queryResult, allValues, nodeDescription, knownObjects, null, processedSegments);
+	private <ET> ET map(MapAccessor queryResult, MapAccessor allValues, Neo4jPersistentEntity<ET> nodeDescription, Set<Path.Segment> processedSegments) {
+		return map(queryResult, allValues, nodeDescription, null, processedSegments);
 	}
 
-	private <ET> ET map(MapAccessor queryResult, MapAccessor allValues, Neo4jPersistentEntity<ET> nodeDescription, KnownObjects knownObjects,
+	private <ET> ET map(MapAccessor queryResult, MapAccessor allValues, Neo4jPersistentEntity<ET> nodeDescription,
 						@Nullable Object lastMappedEntity, Set<Path.Segment> processedSegments) {
 
 		// if the given result does not contain an identifier to the mapped object cannot get temporarily saved
@@ -435,7 +435,7 @@ final class DefaultNeo4jEntityConverter implements Neo4jEntityConverter {
 
 					Object relationshipProperties = map(segment.relationship(), allValues,
 							(Neo4jPersistentEntity) relationshipDescription.getRelationshipPropertiesEntity(),
-							knownObjects, mappedObject, processedSegments);
+							mappedObject, processedSegments);
 					relationshipsAndProperties.add(relationshipProperties);
 					mappedObjectHandler.accept(segment.relationship().type(), relationshipProperties);
 				} else {
@@ -478,7 +478,7 @@ final class DefaultNeo4jEntityConverter implements Neo4jEntityConverter {
 
 							Object relationshipProperties = map(possibleRelationship, allValues,
 									(Neo4jPersistentEntity) relationshipDescription.getRelationshipPropertiesEntity(),
-									knownObjects, mappedObject, processedSegments);
+									mappedObject, processedSegments);
 							relationshipsAndProperties.add(relationshipProperties);
 							mappedObjectHandler.accept(possibleRelationship.type(), relationshipProperties);
 						} else {
@@ -502,7 +502,7 @@ final class DefaultNeo4jEntityConverter implements Neo4jEntityConverter {
 
 					Object relationshipProperties = map(relatedEntityRelationship, allValues,
 							(Neo4jPersistentEntity) relationshipDescription.getRelationshipPropertiesEntity(),
-							knownObjects, valueEntry, processedSegments);
+							valueEntry, processedSegments);
 					relationshipsAndProperties.add(relationshipProperties);
 					mappedObjectHandler.accept(relatedEntity.get(RelationshipDescription.NAME_OF_RELATIONSHIP_TYPE).asString(), relationshipProperties);
 				} else {
