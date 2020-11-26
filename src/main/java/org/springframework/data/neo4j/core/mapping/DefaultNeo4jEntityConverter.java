@@ -34,7 +34,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
-import org.apache.commons.logging.LogFactory;
 import org.neo4j.driver.Value;
 import org.neo4j.driver.Values;
 import org.neo4j.driver.types.MapAccessor;
@@ -43,7 +42,6 @@ import org.neo4j.driver.types.Path;
 import org.neo4j.driver.types.Relationship;
 import org.neo4j.driver.types.TypeSystem;
 import org.springframework.core.CollectionFactory;
-import org.springframework.core.log.LogAccessor;
 import org.springframework.data.mapping.AssociationHandler;
 import org.springframework.data.mapping.MappingException;
 import org.springframework.data.mapping.PersistentPropertyAccessor;
@@ -66,8 +64,6 @@ import org.springframework.util.Assert;
  * @since 6.0
  */
 final class DefaultNeo4jEntityConverter implements Neo4jEntityConverter {
-
-	private static final LogAccessor log = new LogAccessor(LogFactory.getLog(DefaultNeo4jEntityConverter.class));
 
 	private final EntityInstantiators entityInstantiators;
 	private final NodeDescriptionStore nodeDescriptionStore;
